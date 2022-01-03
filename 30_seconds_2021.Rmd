@@ -1,0 +1,226 @@
+---
+title: "30 Seconds 2021"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+    logo: christmas-tree-vector-small.png
+runtime: shiny
+---
+<style>                     
+.navbar {
+  background-color:Maroon;
+  border-color:black;
+}
+.navbar-brand {
+color:#E0E0E0!important;
+}
+
+</style>
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+```
+
+Column {data-height=300}
+-----------------------------------------------------------------------
+
+### <strong>Kaartje trekken</strong>
+
+```{r}
+rm(list=ls())
+
+library(tidyverse)
+library(readxl)
+library(lubridate)
+
+shiny::actionButton("cardpick","|Trek een kaartje en start timer|")
+shiny::actionButton("rules", "|Spelregels|")
+```
+
+```{r}
+
+#read list of words
+
+woorden <- read_excel("oudejaars 30 seconds.xlsx") %>%
+  select(Woorden, Categorie) %>%
+  filter(!is.na(Categorie))
+
+#determine the least possible number of cards
+
+aantal_kaartjes <- woorden %>%
+  group_by(Categorie) %>%
+  summarise(n = n())
+
+categorien <- aantal_kaartjes$Categorie
+aantal_kaartjes <- min(aantal_kaartjes$n)
+
+#initialize cardset
+
+kaartjes <- as.data.frame(
+  t(
+    data.frame("Categorie_1" = sample(woorden$Woorden[which(woorden$Categorie==categorien[1])], size = aantal_kaartjes),
+                       "Categorie_2" = sample(woorden$Woorden[which(woorden$Categorie==categorien[2])], size = aantal_kaartjes),
+                       "Categorie_3" = sample(woorden$Woorden[which(woorden$Categorie==categorien[3])], size = aantal_kaartjes),
+                       "Categorie_4" = sample(woorden$Woorden[which(woorden$Categorie==categorien[4])], size = aantal_kaartjes),
+                       "Categorie_5" = sample(woorden$Woorden[which(woorden$Categorie==categorien[5])], size = aantal_kaartjes)
+    )
+  )
+)
+
+observeEvent(input$rules,{
+  showModal(modalDialog(
+            title = "Spelregels",
+            HTML("<h2>Welkom bij 30 seconds OWI.</h2> <div>In het spel 30 seconds dien je samen met je team genoot binnen 30 seconden 5 woorden te raden. Eén teamlid probeert de woorden te omschrijven zonder ze te noemen. De ander moet ze zo goed mogelijk proberen te raden.</div><br>  
+
+<h2>Punten telling</h2>
+<div>Bij 30 seconds verdien je punten door woorden te raden. Als je binnen de 30 seconden vijf woorden raadt, heb je vijf punten. Er dient echter ook een dobbelsteen gegooid te worden. De dobbelsteen bepaalt het aantal strafpunten. Dit kunnen 0,1 of 2 strafpunten zijn. Gooi je een 2 dan heb je in deze ronde dus 5-2 = 3 punten behaald.</div><br>
+
+<h2>Doel</h2>
+<div>Het team dat als eerste 30 punten behaalt heeft het spel gewonnen</div><br>
+
+<h2>Regels bij het raden</h2>
+<div>Er zijn een paar regels die gelden bij het raden:  
+<ul><li>Diegene die omschrijft mag geen woorden noemen die rijmen</li>
+<li>Je mag niet wijzen naar het object wat je omschrijft</li>  
+<li>Je mag niet naar letters verwijzen</li>  
+<li>Het volledige woord moet geraden zijn om te tellen als punt</li></ul><div>
+
+<h2>Hoe te spelen</h2>
+<div>Klik op de knop <i>Trek een kaartje en start de timer</i> om een nieuw kaartje met woorden te trekken. Rechtsonderin verschijnt dan ook een dobbelsteen, dit zijn de strafpunten. Je trekt het aantal gegooide ogen af van het aantal geraden woorden om tot je punten te komen.</div><br>  
+
+<div>Zodra je een kaartje trekt, begint de timer te lopen. Trek dus pas een kaartje wanneer je er helemaal klaar voor bent.</div>"
+          )))
+})
+
+row.names(kaartjes) <- categorien
+
+kaartnamen <- vector()
+for(i in 1:aantal_kaartjes){
+  kaartnamen[i] <- paste0("Kaartje ",i)
+}
+names(kaartjes) <- kaartnamen
+
+kaart_counter <- reactiveVal(0)
+
+# create a reactive data frame
+
+bak <- reactiveValues(df = kaartjes)
+
+# create button to pick a card
+
+
+
+#initialize timer
+timer <- reactiveVal(30)
+active <- reactiveVal(FALSE)
+
+#run timer
+renderText({
+    paste('Time left: ', seconds_to_period(timer()))
+  })
+
+ observe({
+    invalidateLater(1000, session)
+    isolate({
+      if(active())
+      {
+        timer(timer()-1)
+        if(timer()<1)
+        {
+          active(FALSE)
+          showModal(modalDialog(
+            title = "Tijd is om",
+            "Stop met lezen."
+          ))
+        }
+      }
+    })
+  })
+ 
+ observeEvent(input$cardpick, {active(TRUE)})
+ observeEvent(input$cardpick, {timer(30)})
+ 
+ 
+ 
+```
+
+
+Row {data-height=650}
+-----------------------------------------------------------------------
+
+### <strong>Kaartje</strong>
+
+```{r}
+
+#select cards by pushing cardpick button, resample cards if all possible cards are used.
+woorden_geselecteerd <- shiny::eventReactive(input$cardpick,{
+  if(as.integer(kaart_counter()) < aantal_kaartjes){
+    kaart_counter(kaart_counter() + 1)
+    woorden_temp <- bak$df
+    woorden_temp <- woorden_temp[kaartnamen[kaart_counter()]]
+    rows <- sample(nrow(woorden_temp))
+    woorden_temp <- as.data.frame(woorden_temp[rows,])
+    names(woorden_temp) <- "Woorden"
+    return(woorden_temp)
+  }else{
+    kaart_counter(kaart_counter()-(aantal_kaartjes)+1)
+    new_kaartjes <- as.data.frame(
+      t(
+        data.frame("Categorie_1" = sample(woorden$Woorden[which(woorden$Categorie==categorien[1])], size = aantal_kaartjes),
+                   "Categorie_2" = sample(woorden$Woorden[which(woorden$Categorie==categorien[2])], size = aantal_kaartjes),
+                   "Categorie_3" = sample(woorden$Woorden[which(woorden$Categorie==categorien[3])], size = aantal_kaartjes),
+                   "Categorie_4" = sample(woorden$Woorden[which(woorden$Categorie==categorien[4])], size = aantal_kaartjes),
+                   "Categorie_5" = sample(woorden$Woorden[which(woorden$Categorie==categorien[5])], size = aantal_kaartjes)
+        )
+      )
+    )
+    
+    row.names(new_kaartjes) <- categorien
+    names(new_kaartjes) <- kaartnamen
+    bak$df <- new_kaartjes
+    woorden_temp <- bak$df
+    woorden_temp <- woorden_temp[kaartnamen[kaart_counter()]]
+    rows <- sample(nrow(woorden_temp))
+    woorden_temp <- as.data.frame(woorden_temp[rows,])
+    names(woorden_temp) <- "Woorden"
+    return(woorden_temp)
+  }
+})
+
+#display cards
+
+renderTable({woorden_geselecteerd()})
+
+
+
+```
+
+### <strong>Dobbelsteen</strong>
+
+```{r}
+
+# initialize and sample deduction points dice by pushing cardpick button
+
+aftrekpunten <- shiny::eventReactive(input$cardpick,{
+  dobbelstenen <- c('dobbelsteen_0.png','dobbelsteen_1.png','dobbelsteen_2.png')
+  dobbelsteen <- sample(dobbelstenen, size=1)
+  return(dobbelsteen)
+})
+
+# display dice
+
+shiny::renderImage({
+    if(aftrekpunten()=='dobbelsteen_0.png')
+      list(
+        src=file.path('dobbelsteen_0.png'), height = '164px')
+    else if(aftrekpunten()=='dobbelsteen_1.png')
+      list(
+        src=file.path('dobbelsteen_1.png'), height = '164px')
+    else
+      list(
+        src=file.path('dobbelsteen_2.png'), height = '164px')},deleteFile = F)
+
+
+```
+
